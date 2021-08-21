@@ -1,0 +1,453 @@
+module fsm(clk, reset, a, k2, k1, state);
+	input clk, reset, a;
+	output k2, k1;
+	output [1:0] state;
+	reg k2, k1;
+	reg [1:0] state;
+
+	parameter 	IDLE = 2'b00,
+				START = 2'b01,
+				STOP = 2'b10,
+				CLEAR = 2'b11;
+
+	always @(posedge clk) begin
+		if (!rst) begin
+			//reset
+			state <= IDLE;
+			k2 <= 0;
+			k1 <= 0;
+		end
+		else
+			case(state)
+				IDLE: if(a) begin
+					state <= START;
+					K1 <= 0;
+				end
+				else begin
+					state <= IDLE;
+					k2 <= 0;
+					k1 <= 0;
+				end
+
+				START: if(!a) begin
+					state <= STOP;
+				end
+				else begin
+					state <= START;
+				end
+
+				STOP: if(a) begin
+					state <= CLEAR;
+					k2 <= 1;
+				end
+				else begin
+					state <= STOP;
+				end
+
+				CLEAR: if(!a) begin
+					state <= IDLE;
+					k2 <= 0;
+					k1 <= 1;
+				end
+				else begin
+					state <= CLEAR
+				end
+
+				default: state <= 2'bxx;
+			endcase
+	end
+endmodule
+
+module checker(z, x, clk);
+	input x, clk;
+	output z ;
+	reg [1:0] state, next_state;
+	reg z;
+	parameter s0 = 2'b00, s1 = 2'b01; s2 = 2'b10, s3 = 2'b11;
+
+	always @(x or state) begin
+		case(state)
+			s0: if(x) begin
+				next_state <= s1;
+				z <= 0;
+			end
+			else begin
+				next_state <= s0;
+				z <= 0
+			end
+
+			s1: if(x) begin
+				next_state <= s2;
+				z <= 0;
+			end
+			else begin
+				next_state <= s0;
+				z <= 0;
+			end
+
+			s2: if(x) begin
+				next_state <= s3;
+				z <= 1;
+			end
+			else begin
+				next_state <= s0;
+				z <= 0;
+			end
+
+			s3: if(x) begin
+				next_state <= s3;
+				z <= 1;
+			end
+
+			else begin
+				next_state <= s0;
+				z <= 0;
+			end
+		endcase
+		always @(posedge clk);
+			state <= next_state;
+	end
+		
+	
+endmodule
+
+module fsm(a, clk, rstn, k1, k2, state);
+	input a, clk, rstn;
+	output k1, k2;
+	output [4:0] state;
+	reg [4:0] state;
+	reg k1, k2;
+
+	assign k1 = state[0];
+	assign k2 = state[4];
+
+	/*******output coded state assignment*********** K2_i_j_n_K1******************/
+	parameter
+	IDLE  			= 	5'b0_0_0_0_0,
+	START 			= 	5'b0_0_0_1_0,
+	STOP  			= 	5'b0_0_1_0_0,
+	STOP_TO_CLEAR	= 	5'b1_1_0_0_0,
+	CLEAR 			= 	5'b0_1_0_1_0,
+	CLEAR_TO_IDLE 	= 	5'b0_0_1_1_1;
+
+	always @(posedge clk) begin
+		if (!rstn) begin
+			// reset
+			state <= IDLE;
+		end
+		else case(state)
+			IDLE: if(a) begin
+				state <= START;
+			end
+			else begin
+				state <= IDLE;
+			end
+
+			START: if(!a) begin
+				state <= STOP;
+			end
+			else begin
+				state <= START;
+			end
+
+			STOP: if(a) begin
+				state <= CLEAR;
+			end
+			else begin
+				state <= STOP;
+			end
+
+			STOP_TO_CLEAR: if(!a) begin
+				state <= STOP;
+			end
+			else begin
+				state <= CLEAR;
+			end
+
+			CLEAR_TO_IDLE: if(!a) begin
+				state <= IDLE;
+			end
+			else begin
+				state <= CLEAR;
+			end
+		endcase
+	end
+
+endmodule
+//同步清理DFF
+module DFF_rst(q, clk, reset, data_in);
+	input clk, reset, data_in;
+	output q;
+	reg q;
+	always @(posedge clk)
+		if(!reset) 
+			q <= 0;
+		else
+			q <= data_in;
+endmodule
+
+//异步清零DFF
+module DFF_srst(q, clk, reset, data_in);
+	input clk, reset, data_in;
+	output q;
+	reg q;
+	always @(posedge clk or negedge reset)
+		if(!reset)
+			q <= 0;
+		else
+			q <= data_in;
+endmodule
+
+// T触发器
+module TFF(T, clk, rstn, data_o);
+	input T, clk, rstn;
+	output data_o;
+	reg data_o;
+	always @(posedge clk or negedge rstn)
+		if(!rstn) 
+			data_o <= 1'b0;
+		else if(T)
+			data_o <= ~data_o;
+endmodule
+
+// 采样D触发器的二进制计数器
+module comp2bit(q, clk, rstn);
+	output q;
+	input clk, rstn;
+	output q;
+	reg q;
+	always @(posedge clk or negedge rstn)
+		if(!rstn)
+			q <= 1'b0;
+		else
+			q <= ~q;
+endmodule
+
+// r任意进制计数器
+module comp_11(count, clk, reset);
+	output [3:0] count;
+	input clk, reset;
+	reg [3:0] count;
+	always @(posedge clk)
+		if(reset)
+			count <= 4'b0000;
+		else if(count <= 4'b1010)
+			count <= 4'b0000;
+		else 
+			count <= count + 1;
+endmodule
+
+// 移位寄存器
+module shiftregist1(D, clk, reset);
+	parameter shiftregist1_width = 4;
+	output [shiftregist1_width-1:0] D;
+	input clk, reset;
+	reg [shiftregist1_width-1:0] D;
+	always @(posedge clk)
+		if(!reset) 
+			D <= 4'b0000;
+		else 
+			D <= {D[shiftregist1-2:0], D[shiftregist1_width-1]};
+endmodule
+
+// 序列信号发生器100111
+module signal_maker(out, clk, load, D);
+	parameter M = 6;
+	output out;
+	input clk, load;
+	input [M-1:0] D;
+	reg [M-1:0] Q;
+
+	initial begin
+		Q = 'b100111;
+	end
+	always @(posedge clk)
+		if(load) 
+			Q <= D;
+		else 
+			Q <= {Q[M-2:0],Q[M-1]};
+		assign out = Q[M-1]; 
+endmodule
+
+// verilog设计4位顺序脉冲发生器 1000 - 0100 - 0010 - 0001之间循环
+module state_4(clk, rstn, out);
+	output out;
+	input clk, rstn;
+	reg [3:0] out;
+	reg [1:0] state, next_state;
+
+	always @(posedge clk or negedge rstn)
+		if(!rstn)
+			state <= 2'b00;
+		else 
+			state <= next_state;
+
+	always @(state) begin
+		case(state)
+			2'b00: begin
+				out <= 4'b1000;
+				next_state <= 2'b01;
+			end
+
+			2'b01: begin
+				out <= 4'b0100;
+				next_state <= 2'b10;
+			end
+
+			2'b10: begin
+				out <= 4'b0010;
+				next_state <= 2'b11;
+			end
+
+			2'b11: begin
+				out <= 4'b0001;
+				next_state <= 2'b00;
+			end
+		endcase
+	end
+endmodule
+
+// 监测序列11010
+module seqdet(data_out, data_in, rstn, clk);
+	output data_out;
+	input data_in, clk, rstn;
+	reg [2:0] state, next_state;
+	wire data_out;
+	parameter IDLE = 3'd0, A = 3'd1, B = 3'd2, C = 3'd3, D = 3'd4, E = 3'd5;
+	always @(posedge clk or negedge rstn)
+		if(!rstn) 
+			state <= IDLE;
+		else 
+			state <= next_state;
+
+	always @(state or data_in) begin
+		case(state)
+			IDLE: 	if(data_in)
+						next_state <= A;
+					else
+						next_state <= IDLE;
+
+			A: 		if(data_in)
+						next_state <= B;
+					else
+						next_state <= IDLE;
+
+			B:		if(data_in)
+						next_state <= B;
+					else 
+						next_state <= C;
+
+			C: 		if(data_in)
+						next_state <= D;
+					else
+						next_state <= B;
+
+			D:		if(data_in) 
+						next_state <= B;
+					else
+						next_state <= E;
+
+			E:		if(data_in)
+						next_state <= A;
+					else
+						next_state <= IDLE;
+		endcase
+	end
+
+endmodule
+
+/*******************************************************/
+`timescale 1ns/1ps
+class crc;
+	parameter TBT = 128;  // 声明一个参数TBT = 128是CRC最大的长度
+	logic [TBT-1:0] gseed;  // 声明一个logic变量用于存放CRC的多项式系数，数字表示形式。如G(X) = X3 + X1 + 1（'b1011）
+	logic [TBT-1:0] initial_data; // 声明一个变量用于存放CRC开始计算时的初值
+	logic [TBT-1:0] crc_data;  // 用于存放计算CRC的结果
+
+	task set_gseed(logic [TBT-1:0] in_seed);  // 设定CRC多项式
+		gseed = in_seed;
+	endtask
+
+	task set_00_data();  // 设定计算时的初始值全为0
+		initial_data = {TBT{1'b0}};
+	endtask
+
+	task set_ff_data();  // 设定计算时的初始值全为1
+		initial_data = {TBT{1'b1}}
+	endtask
+
+	task get_crc(logic data);  // 输入data（原始序列）,计算CRC
+		integer i, j;
+		begin
+			i = TBT -1;
+			while(gsseed[i] == 1'b0) begin
+				i = i - 1;     // z直到最高位为1
+			end
+			for(j=0; j<i; j = j + 1) begin
+				if(j == 0) begin
+					crc_data[0] = initial_data[i-1]^data;
+				end
+				else if(gseed[i] == 1'b1) begin
+					crc_data[j] = initial_data[j-1]^initial_data[i-1]^data;
+				end
+				else begin
+					crc_data[j] = initial_data[j-1];
+				end
+				initial_data = crc_data;
+			end
+		end
+	endtask
+endclass
+
+module crc_out;
+	reg[7:0] data_in;
+	reg[7:0] crc_data;
+	integer i, j, t;
+	crc TK_crc;
+	initial begin
+		TK_crc = new();
+		i = 7;
+		j = 0;
+		t = 0;
+		// set G(x)
+		TK_crc.set_gseed(9'b1_1101_0101); // X8 + X7 + X6 + X4 + X2 + 1
+		TK_crc.set_00_data;
+
+		repeat(256) begin
+			// set initial_data = 0;
+			TK_crc.set_00_data;
+			data_in = j; // {$random()} % 256;
+			i = 7;
+			repeat(8) begin
+				TK_crc.get_crc(data_in[i]);
+				i = i - 1;
+			end
+			crc_data = TK_crc.crc_data;
+			# 10;
+			j = j + 1;
+		end
+	end
+endmodule	
+
+module mux3_1(in0, in1, in2, sel0, sel1, out);
+	input in0, in1, in2, sel0, sel1;
+	output out;
+	wire out;
+	assign out = sel1?in2:(sel0?in1:in0);
+endmodule
+
+// 同步复位，复位在时钟的边沿进行采用
+always @(posedge clk ) begin
+	if(reset) begin
+		abd <= 0;
+	end
+end
+
+// 异步复位，不依赖于时钟边沿进行复位采用
+always @(posedge clk or posedge rst) begin
+	if (rst) begin
+		abc < 0;
+	end
+end
+
+// 
