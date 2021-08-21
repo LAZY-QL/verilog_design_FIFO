@@ -1,1 +1,182 @@
+// design fifo depth == 8 and width == 8 RAM
+// clk, 地址[2:0]addr, 片选信号cs_n, 写使能信号cs_n, 数据输入din, 输出dout
+module ram_single(clk, addm, cs_n, we_n, din, dout);
+	input clk,;
+	input [2:0] addm;
+	input cs_n;
+	input we_n;
+	input [7:0] din;
+	output [7:0] dout;
+	reg [7:0] raml [7:0];
+	always @(posedge clk) begin
+		if(cd_n)
+			dout <= 8'bzzzz_zzzz;
+		else 
+			if(we_n)
+				dout <= raml[addm];
+			else 
+				raml[addm] <= din;
+	end
+endmodule
 
+// design fifo doul_port RAM
+module ram_dual(q, addr_in, addr_out, d, we, rd, clk1, clk2);
+	input clk1;
+	input clk2;
+	input [7:0] a;
+	input [2:0] addr_in;
+	input [2:0] addr_out;
+	input we;
+	input rd;
+	output [7:0] q;
+	reg [7:0] q;
+	reg [7:0] men [7:0];
+
+	always @(posedge clk1) begin
+		if(we)
+			mem[addr_in] <= a;
+	end
+
+	always @(posedge clk2) begin
+		if(rd)
+			q <= mem[addr_out];
+	end
+
+endmodule
+
+// ROM 只读存储器 FIFO depth 8, wigth 8bit
+module rom(clk, addm, cs_n, d_out);
+	input clk;
+	input [2:0] addm;
+	input cs_n;
+	output [7:0] d_out;
+	reg [7:0] d_out;
+	reg [7:0] mem [7:0];
+
+	initial begin
+		foreach(mem[i]) begin
+			mem[i] = 8'b0000_0000 + i;
+		end
+	end
+	always @(posedge clk) begin
+		if(cs_n)
+			d_out <= 8'bzzzz_zzzz;
+		else
+			d_out <= mem[addm];
+	end
+endmodule
+
+// FIFO design 8X8
+// 顶层模块
+module FIFO_buffer(clk, rstn, write_2_stack, read_f_stack, data_in, data_out);
+	input clk, rstn;
+	input write_2_stack, read_f_stack;
+	input [7:0] data_in;
+	output [7:0] data_out;
+	wire [7:0] data_out;
+	wire stack_full, stack_empty;  // 空满标志
+	wire [2:0] addr_in, addr_out;  // 内部RAM读写地址
+	FIFO_control U1(.stack_full(stack_full)
+					,.stack_empty(stack_empty)
+					,.write_2_stack(write_2_stack)
+					,.read_f_stack(read_f_stack)
+					,.write_ptr(addr_in)
+					,.read_ptr(addr_out)
+					,.clk(clk)
+					,.rstn(rstn));
+	FIF_dual U2(.d_out(data_out)
+				,.d_in(data_in)
+				,.addr_in(addr_in)
+				,.addr_out(addr_out)
+				,.we(write_2_stack)
+				,.rd(read_f_stack)
+				,.clk1(clk)
+				,.clk2(clk));
+endmodule
+// 控制模块
+module FIFO_control(clk, rstn, stack_full, stack_empty, write_ptr, read_ptr, write_2_stack, read_f_stack);
+	parameter stack_wigth = 8;
+	parameter stack_depth = 8;
+	parameter stack_ptr_width = 3; //地址位宽 
+
+	output stack_full;
+	output stack_empty;
+	output [stack_ptr_width-1 : 0] write_ptr;
+	output [stack_ptr_wigth-1 : 0] read_ptr;
+
+	input clk;
+	input rstn;
+	input write_2_stack;
+	input read_f_stack;
+
+	reg [stack_ptr_width-1 : 0] write_ptr;
+	reg [stack_ptr_width-1 : 0] read_ptr;
+	reg [stack_ptr_width : 0] ptr_gap;  //ptr_gap FIFO中已存数据的深度
+	reg [stack_wigth-1 : 0] data_out;
+	reg [stack_width-1 : 0] stack[stack_depth-1:0]; // 寄存器
+
+	// 堆栈状态 write_ptr, read_ptr, ptr_gap
+	assign stack_full = (ptr_gap == stack_depth);
+	assign stack_empty = {ptr_gap == 0};
+	always @(posedge clk or negedge rstn) begin
+		// ptr_gap FIFO中已存数据的深度 满状态stack_full(ptr_gap == stack_depth); 空状态stack_empty(ptr_gap == 0 )
+		// 复位状态，读写指针回到首单元
+		if(!rstn) begin
+			data_out <= 0;
+			read_ptr <= 0;
+			write_ptr <= 0;
+			ptr_gap <= 0;
+		end
+		// 写入FIFO并且堆栈不是满状态，并且读FIFO关闭
+		else if(write_2_stack&&!stack_full&&!read_f_stack) begin
+			write_ptr <= write_ptr + 1;
+			ptr_gap <= ptr_gap + 1;
+		end
+		// 读FIFO并且堆栈不是空状态，并且写FIFO关闭
+		else if(read_f_stack&&!stack_empty&&!write_2_stack) begin
+			read_ptr <= read_ptr +1;
+			ptr_gap <= ptr_gap -1;
+		end
+		// 读写FIFO打开且堆栈为空状态（只写不读）
+		else if(read_f_stack&&write_2_stack&&stack_empty) begin
+			write_ptr <= write_ptr + 1;
+			ptr_gap <= ptr_gap + 1;
+		end
+		// 读写FIFO打开并且堆栈为满状态（只读不写）
+		else if(read_f_stack&&write_2_stack&&stack_full) begin
+			read_ptr <= read_ptr + 1;
+			ptr_gap <= ptr_gap - 1;
+		end
+		//读写FIFO打开且堆栈为中间状态（读写操作都存在）
+		else if(read_f_stack&&write_2_stack&&!stack_full&&!stack_empty) begin
+			read_ptr <= read_ptr + 1;
+			write_ptr <= write_ptr + 1;
+		end
+	end
+endmodule
+
+module FIFO_dual(clk1, clk2, adrr_in, addr_out, we, rd, data_in, data_out);
+	parameter stack_wigth = 8;
+	parameter stack_depth = 8;
+	parameter stack_ptr_width = 3;
+	input clk1,clk2;
+	input we;
+	input rd;
+	input [stack_ptr_width-1 : 0] addr_in;
+	input [stack_ptr_width-1 : 0] addr_out;
+	input [stack_width-1 : 0] data_in;
+	output [stack_wigth-1 : 0] data_out;
+	reg [stack_wigth-1 : 0] data_out;
+	reg [stack_wigth-1 : 0] mem [stack_depth-1 : 0];
+	always @(posedge clk1) begin
+		if(we) begin
+			men[addr_in] <= data_in;
+		end
+	end
+
+	always @(posedge clk2) begin
+		if(rd) begin
+			data_out <= mem[addr_out];
+		end
+	end
+endmodule
